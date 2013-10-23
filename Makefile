@@ -11,4 +11,4 @@ http.o: http.c http.h
 strlcpy.o: strlcpy.c
 
 clean:
-	rm -f server_f strlcpy.o test
+	rm -f server_f *.o test
