@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <io.h>
 
 static void usage()
 {
@@ -57,11 +58,6 @@ int main(int argc,  char *argv[]) {
 	}
 	/* now safe to do this */
 	port = p;
-
-	/* the message we send the client */
-	strncpy(buffer,
-		"What is the air speed velocity of a coconut laden swallow?\n",
-	sizeof(buffer));
 
 	memset(&sockname, 0, sizeof(sockname));
 	sockname.sin_family = AF_INET;
@@ -120,29 +116,11 @@ int main(int argc,  char *argv[]) {
 		pid = fork();
 		if (pid == -1)
 			err(1, "fork failed");
-
+			/*TODO send internal server error*/
 		if(pid == 0) {
-			ssize_t written, w;
-			/*
-			 * write the message to the client, being sure to
-			 * handle a short write, or being interrupted by
-			 * a signal before we could write anything.
-			 */
-			w = 0;
-			written = 0;
-			while (written < strlen(buffer)) {
-				w = write(clientsd, buffer + written,
-					strlen(buffer) - written);
-				if (w == -1) {
-					if (errno != EINTR) {
-						err(1, "write failed");
-					}
-				}
-				else {
-					written += w;
-				}
-			}
-				exit(0);
+			sockread(fd, request);
+			sockwrite(fd, msg);
+			exit(0);
 		}
 		close(clientsd);
 	}
