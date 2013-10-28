@@ -1,10 +1,10 @@
 CC=gcc
 
+server_f: server_f.c server_f.h http.o strlcpy.o io.o
+	$(CC) server_f.h server_f.c http.o io.o strlcpy.o -o server_f
+
 test: test.c http.c strlcpy.o
 	$(CC) test.c http.c strlcpy.o -o test
-
-server_f: server_f.c server_f.h http.o strlcpy.o io.o
-	$(CC) server_f.h server_f.c http.o strlcpy.o -o server_f
 
 http.o: http.c http.h
 

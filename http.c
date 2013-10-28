@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
+#include "io.h"
 #include "http.h"
 
 #define LINE_LEN 80
@@ -15,17 +16,6 @@ static const char * efile_bad_req = "html/bad_request.htm";
 static const char * efile_forb = "html/forbidden.htm";
 static const char * efile_internal = "html/internal_error.htm";
 static const char * efile_notfound = "html/not_found.htm";
-
-static int contentarr_len = 4096;
-static char response[4416];
-static char head[LINE_LEN];
-static char date[LINE_LEN];
-static char content_type[LINE_LEN];
-static char content_len[LINE_LEN];
-static char content[4096];
-static long size;
-static time_t raw_time;
-static struct tm * time_info;
 
 /*accepts a string detailing an http request
  *returns an open FILE * pointer containing the file requested.
@@ -67,10 +57,10 @@ FILE * proc_req(char * req) {
  *TODO: in case of error in here, find a way to return error packet
  */
 char * build_response(FILE * file, int error) {
-	int temp_len = contentarr_len;
-	char * temp;
+	char * response;
+	
 	if (error == 0) {
-		make_str(file, "HTTP/1.1 200 OK\n");
+		response = make_str(file, "HTTP/1.1 200 OK\n");
 		/*TODO implement and call logging function*/
 	} else {
 		FILE * efile;
@@ -81,7 +71,7 @@ char * build_response(FILE * file, int error) {
 			case EPFNOSUPPORT: {
 				/*Bad Request Error*/
 				efile = fopen(efile_bad_req, "r");
-				make_str(efile,
+				response = make_str(efile,
 					"HTTP/1.1 400 Bad Request\n");
 				/*TODO implement and call logging function*/
 
@@ -89,94 +79,96 @@ char * build_response(FILE * file, int error) {
 			case EACCES: {
 				/*Forbidden Error*/
 				efile = fopen(efile_forb, "r");
-				make_str(efile,
+				response = make_str(efile,
 					"HTTP/1.1 400 Forbidden\n");
 				/*TODO implement and call logging function*/
 			} break;
 			case ENOENT: {
 				/*Not Found Error*/
 				efile = fopen(efile_notfound, "r");
-				make_str(efile,
+				response = make_str(efile,
 					"HTTP/1.1 404 Not Found\n");
 				/*TODO implement and call logging function*/
 			} break;
 			default: {
 				/*Internal Error*/
 				efile = fopen(efile_internal, "r");
-				make_str(efile, 
+				response = make_str(efile, 
 					"HTTP/1.1 500 Internal Server Error\n");
 				/*TODO implement and call logging function*/
 			}
 		}
 	}
 
-	
 	return response;
 }
 
-/*returns as an int the number of bytes read. Will reallocate if it runs out
- *of space.
- *returns -1 if an error occured and could not read
+/*
+ *returns string filled with the contents of FILE file
+ *
+ *puts number of bytes read into int read
+ *returns NULL if error reading
  */
-int fptostr(char * content, int * len, FILE * file) {
-	long read;
+char * fptostr(int * bytes_read, FILE * file) {
 	long rc;
 	char * temp;
 	int fsize;
+	int read;
+	char * content;
 
 	fseek(file, 0L, SEEK_END);
 	fsize = ftell(file);
 	fseek(file, 0L, SEEK_SET);
 
-	/*if the file is longer than what is allocated for, realloc*/
-	while (fsize > *len) {
-		*len = (*len)*2;
-		temp = realloc(content, *len);
-		if (temp != NULL) {
-			content = temp;
-		}
-	}
+	content = malloc(fsize*sizeof(char));
 
-	for (read = 0; read < size; read += rc) {
+	for (read = 0; read < fsize; read += rc) {
 		if ((rc = fread((void*)(content + read), 
-			sizeof(char), size, file)) == -1) {
+			sizeof(char), fsize, file)) == -1) {
 			if (errno != EINTR) {
-				return -1;
+				return NULL;
 			} else {
 				rc = 0;
 			}
 		}
 	}
-	return read;
+
+	*bytes_read = read;
+	return content;
 }
 
-int make_str(FILE * file, const char * msg) {
-	int temp_len = contentarr_len;
+char * make_str(FILE * file, const char * msg) {
 	char * temp;
+	char * date;
+	char * content;
+	char * content_len = malloc(LINE_LEN*sizeof(char));
+	char * content_type = malloc(LINE_LEN*sizeof(char));
+	char * response;
+	char * head = malloc(LINE_LEN*sizeof(char));
+	time_t raw_time;
+	struct tm * time_info;
+	long fsize;
+	int read;
+
 	strlcpy(head, msg, LINE_LEN);
 
 	time(&raw_time);
 	time_info = gmtime(&raw_time);
 	strftime(date, LINE_LEN, "Date: %a, %d %b %Y %T GMT\n", time_info);
 
-	strlcpy(content_type, "Content-Type: text/html\n", 80);
+	strlcpy(content_type, "Content-Type: text/html\n", LINE_LEN);
 
 	fseek(file, 0L, SEEK_END);
-	size = ftell(file);
+	fsize = ftell(file);
 	fseek(file, 0L, SEEK_SET);
+	response = malloc(LINE_LEN*4 + fsize);
 
-	fptostr(content, &temp_len, file);
-	/*content got realloced, reallocate response*/
-	if (temp_len != contentarr_len) {
-		temp = realloc(response, temp_len + LINE_LEN*4);
-		if (temp != NULL) {
-			response = temp;
-		}
-		contentarr_len = temp_len;
-	}
+	content = fptostr(&read, file);
 
-	snprintf(content_len, LINE_LEN, "Content-Length: %ld\n\n", size);
+	snprintf(content_len, LINE_LEN, "Content-Length: %ld\n\n", fsize);
 
-	snprintf(response, size + 321, "%s%s%s%s%s\0", head, date, 
+	snprintf(response, fsize + LINE_LEN*4, "%s%s%s%s%s\0", head, date, 
 		 content_type, content_len, content);
+	
+	return response;
 }

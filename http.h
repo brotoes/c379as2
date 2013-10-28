@@ -3,7 +3,7 @@
 
 FILE * proc_req(char*);
 char * build_response(FILE *, int);
-int fptostr(char *, int *, FILE *);
-int make_str(FILE *, const char *);
+char * fptostr(int *, FILE *);
+char * make_str(FILE *, const char *);
 
 #endif

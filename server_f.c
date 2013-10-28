@@ -11,7 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <io.h>
+#include "http.h"
+#include "io.h"
+#include "server_f.h"
 
 static void usage()
 {
@@ -36,9 +38,9 @@ int main(int argc,  char *argv[]) {
 	u_long p;
 
 	/*
-	* first, figure out what port we will listen on - it should
-	* be our first parameter.
-	*/
+ 	 * first, figure out what port we will listen on - it should
+	 * be our first parameter.
+	 */
 	if (argc != 4) {
 		usage();
 	}
@@ -118,8 +120,23 @@ int main(int argc,  char *argv[]) {
 			err(1, "fork failed");
 			/*TODO send internal server error*/
 		if(pid == 0) {
-			sockread(fd, request);
-			sockwrite(fd, msg);
+			char * request;
+			char * response;
+			FILE * file;
+			printf("calling sockread\n");
+			request = sockread(clientsd);
+			fflush(stdout);
+			printf("calling proc_req");
+			file = proc_req(request);
+			printf("entering if statement");
+			if (file == 0) {
+				printf("NULL received");
+				response = build_response(file, errno);
+			} else {
+				printf("something returned");
+				response = build_response(file, 0);
+			}
+			sockwrite(clientsd, response);
 			exit(0);
 		}
 		close(clientsd);
